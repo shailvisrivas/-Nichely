@@ -1,0 +1,14 @@
+# --- Required ---
+streamlit
+sqlalchemy
+requests
+python-dotenv
+pillow
+numpy
+sentence-transformers
+apscheduler
+cloudinary   # Phase 13 — public image hosting for real Instagram publishing
+
+# --- Add your chosen provider SDKs when you get to Phase 5+ ---
+google-genai
+

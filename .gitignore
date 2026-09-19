@@ -1,0 +1,27 @@
+# Secrets — never commit this
+.env
+
+# Virtual environment — each person creates their own locally
+venv/
+env/
+
+# Python cache
+__pycache__/
+*.pyc
+
+# The local database file — each person should build their own,
+# not share one (avoids merge conflicts on a binary file)
+nichely.db
+
+# Generated poster images
+data/generated_posters/*.jpg
+data/generated_posters/*.jpeg
+!data/generated_posters/.gitkeep
+
+# VS Code settings (optional — remove this line if you want to share
+# editor settings across the team)
+.vscode/
+
+# OS junk
+.DS_Store
+Thumbs.db
