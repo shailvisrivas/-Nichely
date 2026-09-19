@@ -28,29 +28,29 @@ Nichely is an autonomous, agentic AI pipeline that researches trending entertain
 ## Project Structure
 
 nichely/
-├── agents/              # Topic Scout & Content Strategist AI agents
-├── services/            # Research, dedup, poster generation, Instagram publishing, analytics
-├── database/            # SQLAlchemy models and DB setup
-├── tests/               # Phase-by-phase test scripts
-├── utils/               # Helper utilities
-├── app.py               # Streamlit dashboard (main entry point)
-├── pipeline.py           # Orchestrates the full pipeline end-to-end
-├── config.py             # Niche/config settings
+├── agents/ — Topic Scout & Content Strategist AI agents
+├── services/ — Research, dedup, poster generation, Instagram publishing, analytics
+├── database/ — SQLAlchemy models and DB setup
+├── tests/ — Phase-by-phase test scripts
+├── utils/ — Helper utilities
+├── app.py — Streamlit dashboard (main entry point)
+├── pipeline.py — Orchestrates the full pipeline end-to-end
+├── config.py — Niche/config settings
 └── requirements.txt
 
 ## Setup & Installation
 
 1. **Create a virtual environment**
-  
+
    python -m venv venv
-   venv\Scripts\activate      # Windows
-   source venv/bin/activate   # Mac/Linux
-  
+
+   venv\Scripts\activate      (Windows)
+
+   source venv/bin/activate   (Mac/Linux)
 
 2. **Install dependencies**
-  
+
    pip install -r requirements.txt
-   
 
 3. **Configure environment variables**
 
@@ -62,10 +62,10 @@ nichely/
    - `PUBLISH_MODE` — `mock` (safe testing, no real posting) or `live` (publishes for real)
 
 4. **Run the app**
-   ```
+
    streamlit run app.py
-   ```
-   Opens at `localhost:8501`.
+
+   Opens at localhost:8501
 
 ## How to Use
 
@@ -75,19 +75,6 @@ Click **"Run one pipeline cycle now"** in the sidebar to fetch news, rank topics
 - Pick a different **shortlisted topic** instead of the auto-selected one
 
 Once approved, click **Fetch analytics** to pull performance data, which feeds into future topic scoring.
-
-## Team
-
-| Member | Contribution |
-|---|---|
-| [Your name] | Phases 5–8: Topic Scout Agent, Content Strategist Agent, Poster Service, Approval Screen |
-| [Teammate's name] | Phases 1–4, 9–12: Project setup, database, research service, dedup, live publishing, analytics, feedback loop, scheduling |
-
-## Notes
-
-- `venv/`, `.env`, and `nichely.db` are intentionally excluded from this repo (see `.gitignore`) — recreate them locally using the setup steps above.
-- This project was built as part of a college coursework assignment.
-```
 
 
 
