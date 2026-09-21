@@ -600,32 +600,54 @@ def generate_carousel_for_post(
             )
         )
 
-        draw = ImageDraw.Draw(
-            image
-        )
+        image = image.convert("RGBA")
 
         # -----------------------------------------------------------
-        # Cover the old headline area
+        # Cover the old headline area with a gradient that quickly
+        # ramps to near-solid dark, so the OLD headline text (already
+        # baked into this reused poster) is fully hidden before the
+        # NEW slide text is drawn on top — a soft/gradual fade wasn't
+        # dark enough to hide bold white text underneath it.
         # -----------------------------------------------------------
 
         overlay_top = int(
-            image.height * 0.55
+            image.height * 0.52
         )
 
-        draw.rectangle(
-            [
-                (
-                    0,
-                    overlay_top,
-                ),
-                (
-                    image.width,
-                    image.height,
-                ),
-            ],
-            fill=(0, 0, 0),
+        gradient_height = image.height - overlay_top
+
+        gradient = Image.new(
+            "RGBA", (1, gradient_height), color=0
         )
 
+        fade_zone = int(gradient_height * 0.15)  # short soft edge at the very top only
+
+        for gy in range(gradient_height):
+            if gy < fade_zone:
+                alpha = int(245 * (gy / fade_zone))   # quick fade-in
+            else:
+                alpha = 245                             # then stays solidly dark
+            gradient.putpixel((0, gy), (0, 0, 0, alpha))
+
+        gradient = gradient.resize(
+            (image.width, gradient_height)
+        )
+
+        image.paste(
+            Image.alpha_composite(
+                image.crop(
+                    (0, overlay_top, image.width, image.height)
+                ),
+                gradient,
+            ),
+            (0, overlay_top),
+        )
+
+        image = image.convert("RGB")
+
+        draw = ImageDraw.Draw(
+            image
+        )
         # -----------------------------------------------------------
         # Brand tag
         # -----------------------------------------------------------

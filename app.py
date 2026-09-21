@@ -25,12 +25,55 @@ from services.instagramservice import get_publish_mode, InstagramPublishError
 from services.analytics_service import summarize_analytics, AnalyticsError
 from agents.content_strategist import list_candidate_topics, create_post_for_topic
 import pipeline
+from config import POSTER_OUTPUT_DIR
 
+
+def resolve_poster_path(stored_path):
+    """The DB stores absolute poster paths. If the project folder was moved
+    or copied (e.g. D:\\... -> C:\\Users\\...), the stored path is stale, so
+    fall back to the same filename inside this project's poster folder.
+    Returns a usable path string, or None if the file can't be found."""
+    if not stored_path:
+        return None
+    p = Path(stored_path)
+    if p.exists():
+        return str(p)
+    alt = Path(POSTER_OUTPUT_DIR) / p.name
+    return str(alt) if alt.exists() else None
+
+
+import base64
+
+def get_base64_image(image_path):
+    with open(image_path, "rb") as f:
+        return base64.b64encode(f.read()).decode()
+
+bg_image_base64 = get_base64_image(Path(__file__).parent / "assets" / "background.png")
 
 st.set_page_config(page_title="Nichely — Approval Screen", layout="centered")
+
 st.title("Nichely — Post Approval")
 
 SUCCESS_SOUND_PATH = Path(__file__).parent / "assets" / "success_sound.wav"
+
+
+# ---------------------------------------------------------------------
+# Messages + sound queued by the PREVIOUS run.
+# st.rerun() wipes anything drawn before it, so the publish handler below
+# stores its message/sound request in st.session_state and we render it
+# here, at the top of the next run, where it actually stays on screen.
+# ---------------------------------------------------------------------
+
+_flash = st.session_state.pop("flash", None)
+if _flash:
+    _kind, _text = _flash
+    getattr(st, _kind)(_text)
+
+if st.session_state.pop("play_success_sound", False):
+    if SUCCESS_SOUND_PATH.exists():
+        st.audio(str(SUCCESS_SOUND_PATH), autoplay=True)
+    else:
+        st.warning(f"Success sound not found: {SUCCESS_SOUND_PATH}")
 
 
 # ---------------------------------------------------------------------
@@ -187,19 +230,47 @@ if not post_data["poster_local_path"]:
             )
 
 elif post_data.get("poster_local_paths"):
-    slide_paths = json.loads(post_data["poster_local_paths"])
-    cols = st.columns(len(slide_paths))
+    slide_paths = [
+        resolve_poster_path(sp) for sp in json.loads(post_data["poster_local_paths"])
+    ]
+    found_slides = [sp for sp in slide_paths if sp]
 
-    for col, slide_path in zip(cols, slide_paths):
-        col.image(slide_path, use_container_width=True)
+    if found_slides:
+        cols = st.columns(len(found_slides))
+        for col, slide_path in zip(cols, found_slides):
+            col.image(slide_path, use_container_width=True)
+    if len(found_slides) < len(slide_paths):
+        st.warning(
+            f"{len(slide_paths) - len(found_slides)} carousel slide file(s) "
+            "could not be found on this machine."
+        )
 
 else:
-    st.image(post_data["poster_local_path"], width=400)
+    resolved_poster = resolve_poster_path(post_data["poster_local_path"])
 
-    if st.button("🎠 Generate carousel (multi-slide) from this post"):
-        with st.spinner("Generating carousel slides..."):
-            generate_carousel_for_post(post_data["id"])
-        st.rerun()
+    if resolved_poster:
+        st.image(resolved_poster, width=400)
+
+        if st.button("🎠 Generate carousel (multi-slide) from this post"):
+            with st.spinner("Generating carousel slides..."):
+                generate_carousel_for_post(post_data["id"])
+            st.rerun()
+    else:
+        st.warning(
+            "The poster image file for this post isn't on this machine "
+            f"(saved path: {post_data['poster_local_path']}). "
+            "This usually happens when the project folder was moved or copied."
+        )
+        if st.button("🔄 Clear missing poster and regenerate"):
+            with get_session() as session:
+                db_post = (
+                    session.query(Post)
+                    .filter(Post.id == post_data["id"])
+                    .one()
+                )
+                db_post.poster_local_path = None
+                db_post.poster_public_url = None
+            st.rerun()
 
 
 st.markdown(f"**Headline:** {post_data['headline']}")
@@ -247,25 +318,18 @@ if post_data["approval_status"] == "pending" and not st.session_state.get(
                 result = pipeline.publish_approved_post(post_data["id"])
 
                 if result["mode"] == "live":
-                    st.success(
-                        f"Published to Instagram! Media ID: {result['media_id']}"
+                    st.session_state.flash = (
+                        "success",
+                        f"Published to Instagram! Media ID: {result['media_id']}",
                     )
                 else:
-                    st.success(
-                        "Published (mock) — logged to the database instead of real Instagram."
+                    st.session_state.flash = (
+                        "success",
+                        "Published (mock) — logged to the database instead of real Instagram.",
                     )
+                st.session_state.play_success_sound = True
 
-                if SUCCESS_SOUND_PATH.exists():
-                    st.audio(
-                        str(SUCCESS_SOUND_PATH),
-                        autoplay=True,
-                    )
-                else:
-                    st.warning(
-                        f"Success sound not found: {SUCCESS_SOUND_PATH}"
-                    )
-
-            except InstagramPublishError as exc:
+            except Exception as exc:  # InstagramPublishError, PipelineError, upload errors...
                 with get_session() as session:
                     db_post = (
                         session.query(Post)
@@ -274,8 +338,9 @@ if post_data["approval_status"] == "pending" and not st.session_state.get(
                     )
                     db_post.approval_status = "pending"
 
-                st.error(
-                    f"Publishing failed, post left as pending: {exc}"
+                st.session_state.flash = (
+                    "error",
+                    f"Publishing failed, post left as pending: {exc}",
                 )
 
         st.rerun()
@@ -353,17 +418,19 @@ if post_data["approval_status"] == "approved":
                 result = pipeline.refresh_analytics_and_optimize(
                     post_data["id"]
                 )
-                st.success(
-                    "Analytics refreshed and scoring weights updated."
+                st.session_state.flash = (
+                    "success",
+                    "Analytics refreshed and scoring weights updated. "
+                    + result["optimization"]["reasoning"],
                 )
-                st.write(summarize_analytics(result["analytics"]))
-                st.caption(result["optimization"]["reasoning"])
 
             except (AnalyticsError, pipeline.PipelineError) as exc:
-                st.error(f"Could not fetch analytics: {exc}")
+                st.session_state.flash = (
+                    "error",
+                    f"Could not fetch analytics: {exc}",
+                )
 
         st.rerun()
 
     if col2.button("🧠 Show current scoring weights"):
         st.json(get_active_weights())
-

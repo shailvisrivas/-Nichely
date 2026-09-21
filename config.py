@@ -28,6 +28,8 @@ NICHE_SEARCH_KEYWORDS = [
     "film trailer release",
     "celebrity news",
     "movie casting announcement",
+    "red carpet event",
+    "78th Primetime Emmy Awards",
 ]
 
 # Only articles from these domains are fetched (built from the allowlist
