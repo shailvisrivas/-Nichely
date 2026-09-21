@@ -40,7 +40,7 @@ NICHE_SEARCH_KEYWORDS = [
 TRUSTED_DOMAINS_MIN_TIER = 0.8
 
 # ---- Research pipeline thresholds ----
-MAX_ARTICLE_AGE_HOURS = 48  # TEMP for testing — revert before final demo!         
+MAX_ARTICLE_AGE_HOURS = 168  # TEMP for testing — revert before final demo!         
 DEDUP_SIMILARITY_THRESHOLD = 0.85   # cosine similarity above this = same story cluster
 RELEVANCE_MIN_THRESHOLD = 0.18
 # Note: all-MiniLM-L6-v2 (our embedding model) tends to produce lower raw

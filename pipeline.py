@@ -204,6 +204,54 @@ def refresh_analytics_and_optimize(post_id: str) -> dict:
 
 
 # ---------------------------------------------------------------------
+# Phase 4 glue — embed, relevance-filter and cluster newly fetched articles
+# ---------------------------------------------------------------------
+
+def prepare_articles_for_scout() -> dict:
+    """Runs the Phase 4 steps that the Topic Scout depends on.
+
+    The Topic Scout only looks at articles that already have a
+    story_cluster_id, and that id is only ever written by the clustering
+    step. Nothing else in the app called it, so every article fetched by a
+    cycle stayed un-clustered and the Scout reported "No eligible candidate
+    stories found". This function closes that gap:
+
+        1. embed any article that has no embedding yet
+        2. drop articles below RELEVANCE_MIN_THRESHOLD (they stay
+           un-clustered, so they are simply ignored by the Scout)
+        3. cluster the survivors into story clusters
+
+    Only articles with no story_cluster_id yet are touched, so cluster ids
+    that existing topics/posts already point at never change.
+    """
+    from database.models import SourceArticle
+    from services.dedup_service import ensure_embeddings, cluster_articles
+    from services.relevance_service import filter_relevant_article_ids
+
+    with get_session() as session:
+        pending_ids = [
+            row.id
+            for row in session.query(SourceArticle.id)
+            .filter(SourceArticle.story_cluster_id.is_(None))
+            .all()
+        ]
+
+    if not pending_ids:
+        return {"pending": 0, "embedded": 0, "relevant": 0, "clusters": 0}
+
+    embedded = ensure_embeddings(pending_ids)
+    relevant_ids = filter_relevant_article_ids(pending_ids)
+    clusters = cluster_articles(relevant_ids) if relevant_ids else {}
+
+    return {
+        "pending": len(pending_ids),
+        "embedded": embedded,
+        "relevant": len(relevant_ids),
+        "clusters": len(clusters),
+    }
+
+
+# ---------------------------------------------------------------------
 # Phase 12/15 — the full cycle
 # ---------------------------------------------------------------------
 
@@ -211,7 +259,8 @@ def run_full_cycle(auto_publish: bool = False, run_feedback_for_recent: bool = T
     """Runs one complete Nichely cycle:
 
         1. Research  (Phase 3)   — fetch fresh articles
-        2. Topic Scout (Phase 4/5) — dedup, score, rank, pick a topic
+        2. Topic Scout (Phase 4/5) — embed + relevance-filter + cluster the
+           new articles, then score, rank and pick a topic
         3. Content Strategist (Phase 6) — write caption/hashtags/CTA
         4. Poster (Phase 7)      — render the poster image
         5. Publish (Phase 9/13)  — ONLY if auto_publish=True; otherwise
@@ -229,6 +278,8 @@ def run_full_cycle(auto_publish: bool = False, run_feedback_for_recent: bool = T
 
     articles_stored = run_research_pipeline()
     summary["steps"]["research"] = {"new_articles": articles_stored}
+
+    summary["steps"]["prepare_articles"] = prepare_articles_for_scout()
 
     run_topic_scout()
     topic, _ = get_selected_topic()

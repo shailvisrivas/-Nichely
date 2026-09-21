@@ -107,8 +107,138 @@ def _load_font(size: int, bold: bool = False):
 
 
 # ---------------------------------------------------------------------------
-# Main poster renderer
+# Shared slide renderer (used by the main poster AND every carousel slide)
 # ---------------------------------------------------------------------------
+
+def _background_path(post_id: str) -> str:
+    """Where the CLEAN (text-free) square background for a post is kept.
+
+    The carousel draws each slide's text on this file instead of on the
+    finished poster, so there is never any old headline to cover up.
+    """
+    return os.path.join(POSTER_OUTPUT_DIR, f"{post_id}_bg.jpg")
+
+
+def _prepare_square_background(background_image: Image.Image) -> Image.Image:
+    """Centre-crop to a square and resize to poster size. No text added."""
+
+    image = background_image.convert("RGB")
+
+    w, h = image.size
+    side = min(w, h)
+    left = (w - side) // 2
+    top = (h - side) // 2
+
+    return image.crop(
+        (left, top, left + side, top + side)
+    ).resize(
+        (POSTER_WIDTH, POSTER_HEIGHT)
+    )
+
+
+def _draw_slide(
+    background: Image.Image,
+    text: str,
+    font_size: int = 72,
+    line_height: int = 82,
+) -> Image.Image:
+    """
+    Draw the brand tag and `text` directly on top of `background`.
+
+    Legibility comes from a soft, transparent-to-dark gradient over the
+    bottom 55% of the image, so the photo stays visible behind the text
+    (no solid black panel).
+    """
+
+    if background.size != (POSTER_WIDTH, POSTER_HEIGHT):
+        background = background.resize((POSTER_WIDTH, POSTER_HEIGHT))
+
+    image = background.convert("RGBA")
+
+    # -- soft gradient behind the text --------------------------------
+    gradient_height = int(POSTER_HEIGHT * 0.55)
+
+    gradient = Image.new("RGBA", (1, gradient_height), color=0)
+
+    for y in range(gradient_height):
+        alpha = int(230 * (y / gradient_height) ** 1.6)
+        gradient.putpixel((0, y), (0, 0, 0, alpha))
+
+    gradient = gradient.resize((POSTER_WIDTH, gradient_height))
+
+    region_top = POSTER_HEIGHT - gradient_height
+
+    image.paste(
+        Image.alpha_composite(
+            image.crop((0, region_top, POSTER_WIDTH, POSTER_HEIGHT)),
+            gradient,
+        ),
+        (0, region_top),
+    )
+
+    image = image.convert("RGB")
+    draw = ImageDraw.Draw(image)
+
+    # -- brand tag ------------------------------------------------------
+    tag_font = _load_font(32)
+    tag_text = "ENTERTAINMENT"
+
+    tag_padding_x = 22
+    tag_padding_y = 12
+
+    tag_width = draw.textlength(tag_text, font=tag_font) + tag_padding_x * 2
+    tag_height = 32 + tag_padding_y * 2
+
+    tag_x = 40
+    tag_y = 40
+
+    draw.rounded_rectangle(
+        [(tag_x, tag_y), (tag_x + tag_width, tag_y + tag_height)],
+        radius=tag_height // 2,
+        fill=(230, 30, 60),
+    )
+
+    draw.text(
+        (tag_x + tag_padding_x, tag_y + tag_padding_y - 2),
+        tag_text,
+        font=tag_font,
+        fill="white",
+    )
+
+    # -- wrapped, bottom-anchored text -----------------------------------
+    text_font = _load_font(font_size, bold=True)
+    max_width = POSTER_WIDTH - 100
+
+    lines = []
+    current = ""
+
+    for word in text.upper().split():
+        trial = f"{current} {word}".strip()
+
+        if draw.textlength(trial, font=text_font) <= max_width:
+            current = trial
+        else:
+            if current:
+                lines.append(current)
+            current = word
+
+    if current:
+        lines.append(current)
+
+    y = POSTER_HEIGHT - 60 - line_height * len(lines)
+
+    for line in lines:
+        text_width = draw.textlength(line, font=text_font)
+        x = (POSTER_WIDTH - text_width) // 2
+
+        # shadow, then main text
+        draw.text((x + 4, y + 4), line, font=text_font, fill=(0, 0, 0))
+        draw.text((x, y), line, font=text_font, fill="white")
+
+        y += line_height
+
+    return image
+
 
 def render_poster(
     background_image: Image.Image,
@@ -119,258 +249,11 @@ def render_poster(
     Overlay the headline and branding on a background image.
     """
 
-    # ---------------------------------------------------------------
-    # Center crop to square
-    # ---------------------------------------------------------------
+    square = _prepare_square_background(background_image)
+    image = _draw_slide(square, headline, font_size=72, line_height=82)
 
-    w, h = background_image.size
-
-    side = min(w, h)
-
-    left = (w - side) // 2
-    top = (h - side) // 2
-
-    image = background_image.crop(
-        (
-            left,
-            top,
-            left + side,
-            top + side,
-        )
-    ).resize(
-        (
-            POSTER_WIDTH,
-            POSTER_HEIGHT,
-        )
-    )
-
-    image = image.convert("RGBA")
-
-    # ---------------------------------------------------------------
-    # Gradient behind headline
-    # ---------------------------------------------------------------
-
-    gradient_height = int(
-        POSTER_HEIGHT * 0.55
-    )
-
-    gradient = Image.new(
-        "RGBA",
-        (
-            1,
-            gradient_height,
-        ),
-        color=0,
-    )
-
-    for y in range(gradient_height):
-
-        alpha = int(
-            230
-            * (y / gradient_height) ** 1.6
-        )
-
-        gradient.putpixel(
-            (
-                0,
-                y,
-            ),
-            (
-                0,
-                0,
-                0,
-                alpha,
-            ),
-        )
-
-    gradient = gradient.resize(
-        (
-            POSTER_WIDTH,
-            gradient_height,
-        )
-    )
-
-    image.paste(
-        Image.alpha_composite(
-            image.crop(
-                (
-                    0,
-                    POSTER_HEIGHT - gradient_height,
-                    POSTER_WIDTH,
-                    POSTER_HEIGHT,
-                )
-            ),
-            gradient,
-        ),
-        (
-            0,
-            POSTER_HEIGHT - gradient_height,
-        ),
-    )
-
-    image = image.convert("RGB")
-
-    draw = ImageDraw.Draw(image)
-
-    # ---------------------------------------------------------------
-    # Brand tag
-    # ---------------------------------------------------------------
-
-    tag_font = _load_font(
-        32
-    )
-
-    tag_text = "ENTERTAINMENT"
-
-    tag_padding_x = 22
-    tag_padding_y = 12
-
-    tag_width = (
-        draw.textlength(
-            tag_text,
-            font=tag_font,
-        )
-        + tag_padding_x * 2
-    )
-
-    tag_height = (
-        32
-        + tag_padding_y * 2
-    )
-
-    tag_x = 40
-    tag_y = 40
-
-    draw.rounded_rectangle(
-        [
-            (
-                tag_x,
-                tag_y,
-            ),
-            (
-                tag_x + tag_width,
-                tag_y + tag_height,
-            ),
-        ],
-        radius=tag_height // 2,
-        fill=(230, 30, 60),
-    )
-
-    draw.text(
-        (
-            tag_x + tag_padding_x,
-            tag_y + tag_padding_y - 2,
-        ),
-        tag_text,
-        font=tag_font,
-        fill="white",
-    )
-
-    # ---------------------------------------------------------------
-    # Headline
-    # ---------------------------------------------------------------
-
-    headline_font = _load_font(
-        72,
-        bold=True,
-    )
-
-    max_width = (
-        POSTER_WIDTH - 100
-    )
-
-    words = headline.upper().split()
-
-    lines = []
-
-    current = ""
-
-    for word in words:
-
-        trial = (
-            f"{current} {word}"
-        ).strip()
-
-        if draw.textlength(
-            trial,
-            font=headline_font,
-        ) <= max_width:
-
-            current = trial
-
-        else:
-
-            if current:
-                lines.append(current)
-
-            current = word
-
-    if current:
-        lines.append(current)
-
-    line_height = 82
-
-    text_block_height = (
-        line_height
-        * len(lines)
-    )
-
-    y = (
-        POSTER_HEIGHT
-        - 60
-        - text_block_height
-    )
-
-    for line in lines:
-
-        text_width = draw.textlength(
-            line,
-            font=headline_font,
-        )
-
-        x = (
-            POSTER_WIDTH
-            - text_width
-        ) // 2
-
-        # Shadow
-        draw.text(
-            (
-                x + 4,
-                y + 4,
-            ),
-            line,
-            font=headline_font,
-            fill=(0, 0, 0),
-        )
-
-        # Main text
-        draw.text(
-            (
-                x,
-                y,
-            ),
-            line,
-            font=headline_font,
-            fill="white",
-        )
-
-        y += line_height
-
-    # ---------------------------------------------------------------
-    # Save
-    # ---------------------------------------------------------------
-
-    os.makedirs(
-        os.path.dirname(output_path),
-        exist_ok=True,
-    )
-
-    image.save(
-        output_path,
-        "JPEG",
-        quality=92,
-    )
+    os.makedirs(os.path.dirname(output_path), exist_ok=True)
+    image.save(output_path, "JPEG", quality=92)
 
     return output_path
 
@@ -436,6 +319,15 @@ def generate_poster_for_latest_pending_post() -> str | None:
     # Render poster
     # ---------------------------------------------------------------
 
+    # Keep a clean (text-free) copy of the background so carousel slides
+    # can be drawn on it later without any old headline showing through.
+    os.makedirs(POSTER_OUTPUT_DIR, exist_ok=True)
+    _prepare_square_background(background).save(
+        _background_path(post_id),
+        "JPEG",
+        quality=95,
+    )
+
     render_poster(
         background,
         headline,
@@ -483,33 +375,54 @@ def generate_poster_for_latest_pending_post() -> str | None:
 # CAROUSEL GENERATION
 # ---------------------------------------------------------------------------
 
+def _cover_baked_headline(poster: Image.Image) -> Image.Image:
+    """
+    LEGACY fallback, only used for posts made before clean backgrounds were
+    saved. The finished poster already has its headline baked in, so the
+    bottom of the image is covered with a near-solid dark gradient to hide
+    it. This is what produces the big black block -- regenerate the poster
+    for that post to get proper transparent captions.
+    """
+
+    image = poster.convert("RGBA")
+
+    overlay_top = int(image.height * 0.52)
+    gradient_height = image.height - overlay_top
+    fade_zone = int(gradient_height * 0.15)
+
+    gradient = Image.new("RGBA", (1, gradient_height), color=0)
+
+    for gy in range(gradient_height):
+        alpha = int(245 * (gy / fade_zone)) if gy < fade_zone else 245
+        gradient.putpixel((0, gy), (0, 0, 0, alpha))
+
+    gradient = gradient.resize((image.width, gradient_height))
+
+    image.paste(
+        Image.alpha_composite(
+            image.crop((0, overlay_top, image.width, image.height)),
+            gradient,
+        ),
+        (0, overlay_top),
+    )
+
+    return image.convert("RGB")
+
+
 def generate_carousel_for_post(
     post_id: str,
 ) -> list[str]:
     """
     Generate carousel slides WITHOUT generating new AI images.
 
-    IMPORTANT:
-        The existing main poster is reused as the background.
+    Each slide is the post's CLEAN background (saved as <post_id>_bg.jpg
+    when the poster was generated) with that slide's text drawn directly on
+    top, using the same soft gradient as the main poster.
 
-    Example:
+        Slide 1: main headline
+        Slide 2..n: supporting details from carousel_slides_json
 
-        Slide 1:
-            Main headline
-
-        Slide 2:
-            Supporting detail #1
-
-        Slide 3:
-            Supporting detail #2
-
-        Slide 4:
-            Supporting detail #3
-
-    The text changes between slides but the underlying image remains
-    the same.
-
-    No Hugging Face image-generation call is made here.
+    No Hugging Face call is made here.
     """
 
     # ---------------------------------------------------------------
@@ -520,311 +433,87 @@ def generate_carousel_for_post(
 
         post = (
             session.query(Post)
-            .filter(
-                Post.id == post_id
-            )
+            .filter(Post.id == post_id)
             .one()
         )
 
         headline = post.headline
 
         extra_slides = json.loads(
-            post.carousel_slides_json
-            or "[]"
+            post.carousel_slides_json or "[]"
         )
 
-        existing_poster_path = (
-            post.poster_local_path
-        )
+        existing_poster_path = post.poster_local_path
 
     # ---------------------------------------------------------------
     # Validate poster
     # ---------------------------------------------------------------
 
     if not existing_poster_path:
-
         raise RuntimeError(
             "Cannot create carousel because this post "
             "does not have a poster yet. "
             "Generate the poster first."
         )
 
-    if not os.path.exists(
-        existing_poster_path
-    ):
+    # ---------------------------------------------------------------
+    # Pick the base image every slide is drawn on
+    # ---------------------------------------------------------------
 
-        raise RuntimeError(
-            "Existing poster file was not found: "
-            f"{existing_poster_path}"
+    bg_path = _background_path(post_id)
+
+    if os.path.exists(bg_path):
+
+        base = Image.open(bg_path).convert("RGB")
+
+    else:
+
+        if not os.path.exists(existing_poster_path):
+            raise RuntimeError(
+                "Existing poster file was not found: "
+                f"{existing_poster_path}"
+            )
+
+        print(
+            "Note: no clean background saved for this post "
+            "(it was created before that was added), so the old "
+            "headline has to be covered with a dark panel. "
+            "Regenerate the poster to get captions directly on the image."
         )
 
-    # ---------------------------------------------------------------
-    # Slide content
-    # ---------------------------------------------------------------
-
-    slide_texts = [
-        headline
-    ] + extra_slides
-
-    paths = []
+        base = _cover_baked_headline(
+            Image.open(existing_poster_path).convert("RGB").resize(
+                (POSTER_WIDTH, POSTER_HEIGHT)
+            )
+        )
 
     # ---------------------------------------------------------------
     # Create each slide
     # ---------------------------------------------------------------
 
-    for i, text in enumerate(
-        slide_texts
-    ):
+    slide_texts = [headline] + extra_slides
+
+    paths = []
+
+    for i, text in enumerate(slide_texts):
 
         output_path = os.path.join(
             POSTER_OUTPUT_DIR,
             f"{post_id}_{i}.jpg",
         )
 
-        # -----------------------------------------------------------
-        # IMPORTANT:
-        # Reuse the SAME existing poster.
-        # NO Hugging Face call.
-        # -----------------------------------------------------------
-
-        image = Image.open(
-            existing_poster_path
-        ).convert("RGB")
-
-        # Make sure carousel image has the correct dimensions.
-
-        image = image.resize(
-            (
-                POSTER_WIDTH,
-                POSTER_HEIGHT,
-            )
+        image = _draw_slide(
+            base,
+            text,
+            font_size=68,
+            line_height=78,
         )
 
-        image = image.convert("RGBA")
+        os.makedirs(os.path.dirname(output_path), exist_ok=True)
 
-        # -----------------------------------------------------------
-        # Cover the old headline area with a gradient that quickly
-        # ramps to near-solid dark, so the OLD headline text (already
-        # baked into this reused poster) is fully hidden before the
-        # NEW slide text is drawn on top — a soft/gradual fade wasn't
-        # dark enough to hide bold white text underneath it.
-        # -----------------------------------------------------------
+        image.save(output_path, "JPEG", quality=92)
 
-        overlay_top = int(
-            image.height * 0.52
-        )
-
-        gradient_height = image.height - overlay_top
-
-        gradient = Image.new(
-            "RGBA", (1, gradient_height), color=0
-        )
-
-        fade_zone = int(gradient_height * 0.15)  # short soft edge at the very top only
-
-        for gy in range(gradient_height):
-            if gy < fade_zone:
-                alpha = int(245 * (gy / fade_zone))   # quick fade-in
-            else:
-                alpha = 245                             # then stays solidly dark
-            gradient.putpixel((0, gy), (0, 0, 0, alpha))
-
-        gradient = gradient.resize(
-            (image.width, gradient_height)
-        )
-
-        image.paste(
-            Image.alpha_composite(
-                image.crop(
-                    (0, overlay_top, image.width, image.height)
-                ),
-                gradient,
-            ),
-            (0, overlay_top),
-        )
-
-        image = image.convert("RGB")
-
-        draw = ImageDraw.Draw(
-            image
-        )
-        # -----------------------------------------------------------
-        # Brand tag
-        # -----------------------------------------------------------
-
-        tag_font = _load_font(
-            32
-        )
-
-        tag_text = "ENTERTAINMENT"
-
-        tag_padding_x = 22
-        tag_padding_y = 12
-
-        tag_width = (
-            draw.textlength(
-                tag_text,
-                font=tag_font,
-            )
-            + tag_padding_x * 2
-        )
-
-        tag_height = (
-            32
-            + tag_padding_y * 2
-        )
-
-        tag_x = 40
-        tag_y = 40
-
-        draw.rounded_rectangle(
-            [
-                (
-                    tag_x,
-                    tag_y,
-                ),
-                (
-                    tag_x + tag_width,
-                    tag_y + tag_height,
-                ),
-            ],
-            radius=tag_height // 2,
-            fill=(230, 30, 60),
-        )
-
-        draw.text(
-            (
-                tag_x + tag_padding_x,
-                tag_y + tag_padding_y - 2,
-            ),
-            tag_text,
-            font=tag_font,
-            fill="white",
-        )
-
-        # -----------------------------------------------------------
-        # Slide text
-        # -----------------------------------------------------------
-
-        headline_font = _load_font(
-            68,
-            bold=True,
-        )
-
-        max_width = (
-            image.width - 100
-        )
-
-        words = text.upper().split()
-
-        lines = []
-
-        current = ""
-
-        for word in words:
-
-            trial = (
-                f"{current} {word}"
-            ).strip()
-
-            if draw.textlength(
-                trial,
-                font=headline_font,
-            ) <= max_width:
-
-                current = trial
-
-            else:
-
-                if current:
-                    lines.append(
-                        current
-                    )
-
-                current = word
-
-        if current:
-            lines.append(
-                current
-            )
-
-        # -----------------------------------------------------------
-        # Position text
-        # -----------------------------------------------------------
-
-        line_height = 78
-
-        text_block_height = (
-            line_height
-            * len(lines)
-        )
-
-        y = (
-            image.height
-            - 70
-            - text_block_height
-        )
-
-        # -----------------------------------------------------------
-        # Draw text
-        # -----------------------------------------------------------
-
-        for line in lines:
-
-            text_width = draw.textlength(
-                line,
-                font=headline_font,
-            )
-
-            x = (
-                image.width
-                - text_width
-            ) // 2
-
-            # Shadow
-            draw.text(
-                (
-                    x + 4,
-                    y + 4,
-                ),
-                line,
-                font=headline_font,
-                fill=(0, 0, 0),
-            )
-
-            # Main text
-            draw.text(
-                (
-                    x,
-                    y,
-                ),
-                line,
-                font=headline_font,
-                fill="white",
-            )
-
-            y += line_height
-
-        # -----------------------------------------------------------
-        # Save slide
-        # -----------------------------------------------------------
-
-        os.makedirs(
-            os.path.dirname(
-                output_path
-            ),
-            exist_ok=True,
-        )
-
-        image.save(
-            output_path,
-            "JPEG",
-            quality=92,
-        )
-
-        paths.append(
-            output_path
-        )
+        paths.append(output_path)
 
     # ---------------------------------------------------------------
     # Save carousel paths in database
@@ -834,15 +523,11 @@ def generate_carousel_for_post(
 
         post = (
             session.query(Post)
-            .filter(
-                Post.id == post_id
-            )
+            .filter(Post.id == post_id)
             .one()
         )
 
-        post.poster_local_paths = json.dumps(
-            paths
-        )
+        post.poster_local_paths = json.dumps(paths)
 
     return paths
 

@@ -163,7 +163,24 @@ def run_topic_scout():
 
     candidates = build_candidates()
     if not candidates:
-        print("No eligible candidate stories found (all filtered out or too old).")
+        with get_session() as session:
+            total = session.query(SourceArticle).count()
+            clustered = (
+                session.query(SourceArticle)
+                .filter(SourceArticle.story_cluster_id.isnot(None))
+                .count()
+            )
+        print("No eligible candidate stories found.")
+        print(
+            f"  {total} article(s) in the database, {clustered} clustered. A story is only "
+            f"a candidate if it is clustered AND its newest article is under "
+            f"{MAX_ARTICLE_AGE_HOURS}h old."
+        )
+        if clustered < total:
+            print(
+                "  Un-clustered articles exist -> run pipeline.prepare_articles_for_scout() "
+                "(embed + relevance filter + cluster) before the Scout."
+            )
         return
 
     weights = get_active_weights()

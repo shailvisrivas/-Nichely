@@ -44,11 +44,12 @@ def run():
         return _inner
 
     with patch.object(pipeline, "run_research_pipeline", side_effect=record("research", 3)), \
+         patch.object(pipeline, "prepare_articles_for_scout", side_effect=record("prepare", {"pending": 0})), \
          patch.object(pipeline, "run_topic_scout", side_effect=record("topic_scout")), \
          patch.object(pipeline, "get_selected_topic", return_value=(None, None)):
         summary = pipeline.run_full_cycle(auto_publish=False, run_feedback_for_recent=False)
 
-        assert calls == ["research", "topic_scout"]
+        assert calls == ["research", "prepare", "topic_scout"]
         assert summary["steps"]["research"]["new_articles"] == 3
         assert summary["steps"]["topic_scout"]["selected_topic"] is None
         assert "content_strategist" not in summary["steps"]
