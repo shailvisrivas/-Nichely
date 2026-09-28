@@ -505,8 +505,8 @@ def generate_carousel_for_post(
         image = _draw_slide(
             base,
             text,
-            font_size=68,
-            line_height=78,
+            font_size=58,
+            line_height=66,
         )
 
         os.makedirs(os.path.dirname(output_path), exist_ok=True)

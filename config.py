@@ -84,7 +84,7 @@ DEFAULT_SCORING_WEIGHTS = {
 EMBEDDING_MODEL_NAME = "all-MiniLM-L6-v2"  # local sentence-transformers model, no API cost
 
 # ---- LLM provider (Phase 5 & 6) ----
-GEMINI_MODEL_NAME = "gemini-3.6-flash"  # cheap/free-tier friendly model for scoring + captioning
+GEMINI_MODEL_NAME = "gemini-3.1-flash-lite"
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 
 

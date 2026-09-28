@@ -37,7 +37,7 @@ from config import GEMINI_API_KEY, GEMINI_MODEL_NAME, NICHE_DESCRIPTION, MAX_ART
 from database.db import get_session, init_db, get_active_weights
 from database.models import SourceArticle, TopicConsidered
 from services.embedding_service import embed_text, embedding_from_json, cosine_similarity
-
+from utils.gemini_retry import generate_with_retry
 
 # ---------------------------------------------------------------------------
 # Deterministic scoring helpers
@@ -145,7 +145,7 @@ def score_with_gemini(candidates: list[dict]) -> dict:
     ]
 
     prompt = SCOUT_PROMPT_TEMPLATE.format(candidates_json=json.dumps(slim, indent=2))
-    response = client.models.generate_content(model=GEMINI_MODEL_NAME, contents=prompt)
+    response = generate_with_retry(client, GEMINI_MODEL_NAME, prompt)
 
     raw_text = response.text.strip()
     if raw_text.startswith("```"):

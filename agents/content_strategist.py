@@ -49,7 +49,7 @@ Write:
 - "hashtags": an array of 8-12 relevant hashtags (mix of niche-standard tags and ones specific to this story's actual people/titles/events)
 - "person_name": the single real public figure this story is specifically ABOUT (not just mentioned in passing). Only return a name if the article's main subject is that individual — e.g. their announcement, their role, their statement, their project. If the story is about a group, an industry trend, box office numbers, an award ceremony as a whole, or multiple people equally, return null. Do not guess or pick the "closest" person if none is clearly the focus.
 - "poster_image_description": a one-sentence description of what the poster's background image should show (describe a scene/setting; this is used for context only)
-- "carousel_slides": an array of 2-3 short slide captions (each under 8 words), each highlighting one separate supporting detail from the article -- these become extra slides in a multi-image carousel post, alongside the main headline slide. Keep them punchy and standalone.
+- "carousel_slides": an array of 2-3 slide captions (10-13 words each), each a complete sentence with its own subject -- do NOT drop the subject to save words (e.g. write "The film beats Force Awakens at the box office", not "Beats Force Awakens at the box office"). Each highlights one separate supporting detail from the article, stands alone without the headline slide for context, and reads naturally when spoken aloud. These become extra slides in a multi-image carousel post, alongside the main headline slide.
 
 Respond with ONLY valid JSON, no markdown fences, no preamble, in exactly this shape:
 {{
