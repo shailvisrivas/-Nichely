@@ -77,4 +77,28 @@ Click **"Run one pipeline cycle now"** in the sidebar to fetch news, rank topics
 Once approved, click **Fetch analytics** to pull performance data, which feeds into future topic scoring.
 
 
+### Team Contributions
+
+**[Teammate 1: Aamna Naqvi]**
+- **Phase 1:** Project setup and folder structure *(joint)*
+- **Phase 2:** Database schema and models using SQLAlchemy
+- **Phase 3:** Research Service — NewsAPI integration and source reliability scoring
+- **Phase 4:** Deduplication & Relevance — embedding-based clustering and filtering
+- **Phase 5:** Topic Scout Agent — scoring and ranking candidate news topics
+
+**[Teammate 2: Shailvi Srivastava]**
+- **Phase 6:** Content Strategist Agent — Gemini-powered caption, hashtag, and CTA generation, with source-article grounding and human-feedback regeneration
+- **Phase 7:** Poster Service — poster image sourcing and text overlay rendering; originally AI-generated using Stable Diffusion XL, later iterated to real, licensed photos via Wikimedia Commons for accuracy on real public figures
+- **Phase 8:** Streamlit Approval Screen — human-in-the-loop review interface for pending posts
+- **Phase 9:** Instagram Publishing Integration — publishing workflow using the Meta Graph API
+- **Phase 10:** Analytics Service — collection of Instagram engagement data
+
+**[Teammate 3: Vanshika Vashisth]**
+- **Phase 11:** Feedback & Optimization Agent — scoring weight tuning based on performance
+- **Phase 12:** Scheduling and workflow automation
+- **Phase 13:** Live Publishing Testing — mocked testing of the Instagram container → publish workflow, including credential validation and API-error handling
+- **Phase 14:** Live Readiness Testing — verification of production-readiness checks for required Instagram and Cloudinary configuration
+- **Phase 15:** End-to-End Pipeline Testing — validation of complete pipeline orchestration, auto-publish gating, and the analytics → feedback optimization loop
+
+
 
