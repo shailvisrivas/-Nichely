@@ -88,7 +88,7 @@ Once approved, click **Fetch analytics** to pull performance data, which feeds i
 
 **[Teammate 2: Shailvi Srivastava]**
 - **Phase 6:** Content Strategist Agent — Gemini-powered caption, hashtag, and CTA generation, with source-article grounding and human-feedback regeneration
-- **Phase 7:** Poster Service — poster image sourcing and text overlay rendering; originally AI-generated using Stable Diffusion XL
+- **Phase 7:** Poster Service — poster image sourcing and text overlay rendering; originally AI-generated using Stable Diffusion XL (via Hugging Face Inference API)
 - **Phase 8:** Streamlit Approval Screen — human-in-the-loop review interface for pending posts
 - **Phase 9:** Instagram Publishing Integration — publishing workflow using the Meta Graph API
 - **Phase 10:** Analytics Service — collection of Instagram engagement data
