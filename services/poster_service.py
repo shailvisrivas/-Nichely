@@ -2,20 +2,25 @@
 Poster service — Phase 7 + carousel feature.
 
 Phase 7:
-    Generates a background image using Hugging Face SDXL,
+    Generates a background image using AI Horde,
     then overlays the headline and branding.
 
 Carousel:
     Reuses the already-generated poster image.
     Different text is placed on each slide locally using Pillow.
-    This means carousel generation does NOT call Hugging Face again.
+    This means carousel generation does NOT call AI Horde again.
 """
 
 import json
 import os
+import time
+from io import BytesIO
 
+import requests
+from dotenv import load_dotenv
 from PIL import Image, ImageDraw, ImageFont
-from huggingface_hub import InferenceClient
+
+load_dotenv()
 
 from config import POSTER_WIDTH, POSTER_HEIGHT, POSTER_OUTPUT_DIR
 from database.db import get_session
@@ -27,12 +32,21 @@ from services.cloud_upload_service import (
 
 
 # ---------------------------------------------------------------------------
-# Hugging Face configuration
+# AI Horde configuration
 # ---------------------------------------------------------------------------
 
-HF_TOKEN = os.getenv("HF_TOKEN")
+AI_HORDE_API_KEY = os.getenv("AI_HORDE_API_KEY")
+AI_HORDE_API_BASE = "https://aihorde.net/api/v2"
 
-IMAGE_MODEL_NAME = "stabilityai/stable-diffusion-xl-base-1.0"
+AI_HORDE_HEADERS = {
+    "apikey": AI_HORDE_API_KEY or "0000000000",
+    # AI Horde asks clients to identify themselves with a Client-Agent header.
+    "Client-Agent": "Nichely:1.0",
+}
+
+# Polling limits: up to about 6 minutes total.
+AI_HORDE_POLL_INTERVAL_SECONDS = 3
+AI_HORDE_MAX_POLLS = 120
 
 
 # ---------------------------------------------------------------------------
@@ -41,20 +55,21 @@ IMAGE_MODEL_NAME = "stabilityai/stable-diffusion-xl-base-1.0"
 
 def generate_background_image(image_description: str) -> Image.Image:
     """
-    Generate the background image for the main poster using Hugging Face.
+    Generate the background image for the main poster using AI Horde.
 
     NOTE:
     This is used for the FIRST/main poster only.
-
     Carousel generation does NOT call this function.
+
+    AI Horde is asynchronous: submit a request, poll its status, then
+    download the generated image.
     """
 
-    if not HF_TOKEN:
+    if not AI_HORDE_API_KEY:
         raise RuntimeError(
-            "HF_TOKEN is not set. Add it to your .env file before running this."
+            "AI_HORDE_API_KEY is not set. Add it to your .env file "
+            "and restart Nichely."
         )
-
-    client = InferenceClient(token=HF_TOKEN)
 
     prompt = (
         "A high-quality, cinematic photo for an entertainment news poster: "
@@ -63,10 +78,126 @@ def generate_background_image(image_description: str) -> Image.Image:
         "Square composition, no text, no logos, no watermarks."
     )
 
-    return client.text_to_image(
-        prompt,
-        model=IMAGE_MODEL_NAME,
+    payload = {
+        "prompt": prompt,
+        "params": {
+            "width": 512,
+            "height": 512,
+            "steps": 20,
+            "n": 1,
+        },
+        "nsfw": False,
+        "censor_nsfw": True,
+        "r2": True,
+        "shared": False,
+    }
+
+    # Do not pin a specific model name: AI Horde's available models/workers
+    # can change, and allowing its scheduler to choose improves compatibility.
+    submit_response = requests.post(
+        f"{AI_HORDE_API_BASE}/generate/async",
+        headers=AI_HORDE_HEADERS,
+        json=payload,
+        timeout=45,
     )
+
+    if not submit_response.ok:
+        raise RuntimeError(
+            "AI Horde could not accept the image request "
+            f"(HTTP {submit_response.status_code}): "
+            f"{submit_response.text[:500]}"
+        )
+
+    try:
+        request_id = submit_response.json()["id"]
+    except (ValueError, KeyError) as exc:
+        raise RuntimeError(
+            "AI Horde returned an unexpected response when submitting "
+            "the image request."
+        ) from exc
+
+    # Wait for AI Horde's community workers to generate the image.
+    for _ in range(AI_HORDE_MAX_POLLS):
+        time.sleep(AI_HORDE_POLL_INTERVAL_SECONDS)
+
+        check_response = requests.get(
+            f"{AI_HORDE_API_BASE}/generate/check/{request_id}",
+            headers=AI_HORDE_HEADERS,
+            timeout=30,
+        )
+
+        if not check_response.ok:
+            raise RuntimeError(
+                "Could not check AI Horde generation status "
+                f"(HTTP {check_response.status_code}): "
+                f"{check_response.text[:500]}"
+            )
+
+        try:
+            status = check_response.json()
+        except ValueError as exc:
+            raise RuntimeError(
+                "AI Horde returned invalid JSON while checking generation."
+            ) from exc
+
+        if status.get("faulted"):
+            raise RuntimeError(
+                "AI Horde could not generate the image. "
+                "There may be no suitable workers available; try again later."
+            )
+
+        # The API has used both a boolean `done` and a `finished` count
+        # in status responses; accept either completion indicator.
+        finished = status.get("finished", 0)
+        if status.get("done") or (
+            isinstance(finished, (int, float)) and finished >= 1
+        ):
+            break
+    else:
+        raise TimeoutError(
+            "AI Horde has not finished generating the image after "
+            f"{AI_HORDE_MAX_POLLS * AI_HORDE_POLL_INTERVAL_SECONDS} seconds. "
+            "The free community queue can be busy; please try again."
+        )
+
+    result_response = requests.get(
+        f"{AI_HORDE_API_BASE}/generate/status/{request_id}",
+        headers=AI_HORDE_HEADERS,
+        timeout=45,
+    )
+
+    if not result_response.ok:
+        raise RuntimeError(
+            "Could not retrieve the AI Horde image result "
+            f"(HTTP {result_response.status_code}): "
+            f"{result_response.text[:500]}"
+        )
+
+    try:
+        generations = result_response.json().get("generations", [])
+    except ValueError as exc:
+        raise RuntimeError(
+            "AI Horde returned invalid JSON when retrieving the image."
+        ) from exc
+
+    if not generations or not generations[0].get("img"):
+        raise RuntimeError(
+            "AI Horde finished the request but did not return an image. "
+            "Please try again."
+        )
+
+    image_url = generations[0]["img"]
+    image_response = requests.get(image_url, timeout=60)
+    image_response.raise_for_status()
+
+    try:
+        with Image.open(BytesIO(image_response.content)) as generated_image:
+            generated_image.load()
+            return generated_image.convert("RGB")
+    except Exception as exc:
+        raise RuntimeError(
+            "AI Horde returned a file that Pillow could not open as an image."
+        ) from exc
 
 
 # ---------------------------------------------------------------------------
@@ -266,7 +397,7 @@ def generate_poster_for_latest_pending_post() -> str | None:
     """
     Find the most recent pending post without a poster.
 
-    Generates the main poster using Hugging Face,
+    Generates the main poster using AI Horde,
     saves it locally, and attempts to upload it to Cloudinary.
     """
 
@@ -422,7 +553,7 @@ def generate_carousel_for_post(
         Slide 1: main headline
         Slide 2..n: supporting details from carousel_slides_json
 
-    No Hugging Face call is made here.
+    No AI Horde call is made here.
     """
 
     # ---------------------------------------------------------------
