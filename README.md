@@ -100,5 +100,10 @@ Once approved, click **Fetch analytics** to pull performance data, which feeds i
 - **Phase 14:** Live Readiness Testing — verification of production-readiness checks for required Instagram and Cloudinary configuration
 - **Phase 15:** End-to-End Pipeline Testing — validation of complete pipeline orchestration, auto-publish gating, and the analytics → feedback optimization loop
 
+## 📱 See It in Action
 
+Want to see the content Nichely generates? Check out our Instagram page:
+👉 [@offscriptfeed](https://www.instagram.com/offscriptfeed)
+
+Every post there (poster, caption, hashtags and carousel) is created and published by Nichely's pipeline after approval.
 
