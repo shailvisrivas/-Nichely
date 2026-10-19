@@ -99,5 +99,6 @@ This was a team project, with work split across phases as follows:
 
 Want to see the content Nichely generates? Check out our Instagram page:
 [@offscriptfeed](https://www.instagram.com/offscriptfeed)
+
 Every post there (poster, caption, hashtags and carousel) is created and published by Nichely's pipeline after approval.
 
