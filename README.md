@@ -1,3 +1,7 @@
+ 
+
+https://github.com/user-attachments/assets/67a3cd70-31ba-4e7c-b881-95d82ada6021
+
 # Nichely — AI-Powered Instagram Content Automation
 
 Nichely is an autonomous, agentic AI pipeline that researches trending entertainment news (Bollywood & Hollywood), decides what's worth posting, generates ready-to-publish content, and publishes it live to Instagram — with a human approval step in between.
